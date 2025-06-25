@@ -1,0 +1,7 @@
+.idea
+.env
+*.db
+adru_raw
+csv_raw
+txt_out
+csv_out

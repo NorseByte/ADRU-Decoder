@@ -1,0 +1,12 @@
+decode_tool:
+  executable_path: "C:\\Program Files\\JDR-MDR Utility\\jdrmdr_console.exe"
+
+output:
+  txt_output_dir: "{PATH-TO-PROJECT}/ADRU-Decoder/txt_out"
+  csv_output_dir: "{PATH-TO-PROJECT}/ADRU-Decoder/csv_out"
+
+input:
+  adru_input_dir: "{PATH-TO-PROJECT}/ADRU-Decoder/adru_raw"
+  csv_input_dir: "{PATH-TO-PROJECT}/ADRU-Decoder/csv_raw"
+  input_type: 2
+  output_types: ["t"] # In the current version only text output is supported, c as in csv will maybe be added later and we can then use it here, add it as a new item with the t, and it will automatically be generated.
