@@ -74,6 +74,58 @@ The reason here is that you might have created the file from EXCEL. And it did n
 
 It should now work without any issues.
 
+### Database diagram
+![database-schema.png](database-schema.png)
+
+````db2
+// ADRU File Export Database Schema 
+
+Table adru_file {
+  af_id integer [primary key, increment]
+  af_name text
+  af_created_at timestamp
+  af_md5_hash TEXT [unique, note: "Uniqe identifier so we know if it allready has been added"]
+}
+
+Table adru_message_file {
+  amf_id integer [primary key, increment]
+  amf_af_id integer
+  amf_name text
+  amf_message_count int
+  amf_created_at timestamp
+  amf_md5_hash TEXT [unique, note: "Uniqe identifier so we know if it allready has been added"]
+}
+
+Table adru_messages {
+  am_id integer [primary key, increment]
+  am_local_id int [note: 'This is the id from the MSG annotation in the adru file.']
+  am_amf_id integer
+}
+
+Table adru_message_jru {
+  amj_id integer [primary key, increment]
+  amj_am_id integer
+}
+
+Table adru_message_etcs {
+  ame_id integer [primary key, increment]
+  ame_am_id integer
+}
+
+Table adru_message_dru {
+  amd_id integer [primary key, increment]
+  amd_am_id integer
+}
+
+
+Ref: "adru_messages"."am_id" < "adru_message_jru"."amj_am_id"
+Ref: "adru_messages"."am_id" < "adru_message_etcs"."ame_am_id"
+Ref: "adru_file"."af_id" < "adru_message_file"."amf_af_id"
+Ref: "adru_message_file"."amf_id" < "adru_messages"."am_amf_id"
+
+Ref: "adru_messages"."am_id" < "adru_message_dru"."amd_am_id"
+````
+
 ## Final words
 The program have been made to only extract the messages. But have the code needed to enable CSV as well when this is supported. But you will need to do some small updates. As an example now it check if the txt file exist, if it does it to not run through the decoding process, if csv is enabled later and you allready have the txt it will never generate the csv. So you will need to update that logic when csv is enabled as an export.
 

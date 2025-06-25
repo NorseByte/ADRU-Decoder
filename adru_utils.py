@@ -53,22 +53,24 @@ def count_msg_in_txt(txt_path: Path) -> int:
     return msg_count
 
 
-def extract_unique_attributes(txt_path: Path, total_messages: int):
+def extract_unique_attributes(txt_path: Path, total_messages: int) -> tuple[list[str], list[str], list[str]]:
     """
-    Extracts all unique attribute names from JRU and ETCS blocks in a decoded ADRU text file.
+    Extracts all unique attribute names from JRU, ETCS, and DRU blocks in a decoded ADRU text file.
 
     Args:
         txt_path (Path): Path to the large .txt file.
         total_messages (int): Total number of messages to show progress while scanning
 
     Returns:
-        tuple: (sorted list of JRU attribute names, sorted list of ETCS attribute names)
+        tuple: (sorted list of JRU attribute names, sorted list of ETCS attribute names, sorted list of DRU attribute names)
     """
     unique_jru_attrs = set()
     unique_etcs_attrs = set()
+    unique_dru_attrs = set()
 
     inside_jru = False
     inside_etcs = False
+    inside_dru = False
     current_msg = 0
 
     with txt_path.open("r", encoding="utf-8", errors="ignore") as file:
@@ -81,37 +83,52 @@ def extract_unique_attributes(txt_path: Path, total_messages: int):
                 print(f"\r🔍 Scanning message {current_msg} of {total_messages} for attributes", end="")
                 inside_jru = False
                 inside_etcs = False
+                inside_dru = False
                 continue
 
+            # Section openers
             if line == "JRU (":
                 inside_jru = True
+                inside_etcs = inside_dru = False
                 continue
 
             if line == "ETCS ON-BOARD PROPRIETARY JURIDICAL DATA (":
                 inside_etcs = True
+                inside_jru = inside_dru = False
+                continue
+
+            if line == "DRU ETCS (":
+                inside_dru = True
+                inside_jru = inside_etcs = False
+                continue
+
+            # Section closers
+            if line == ")" and inside_dru:
+                inside_dru = False
                 continue
 
             if line == ")" and inside_etcs:
                 inside_etcs = False
                 continue
 
-            if line == ")" and inside_jru and not inside_etcs:
-                # Close JRU only if we're not still in ETCS
+            if line == ")" and inside_jru:
                 inside_jru = False
                 continue
 
             # Collect attribute names
-            if inside_etcs or inside_jru:
+            if inside_jru or inside_etcs or inside_dru:
                 parts = line.split(":", 1)
                 if len(parts) >= 2:
                     attr_name = parts[0].split(maxsplit=1)[-1].strip()
-                    if inside_etcs:
-                        unique_etcs_attrs.add(attr_name)
-                    elif inside_jru:
+                    if inside_jru:
                         unique_jru_attrs.add(attr_name)
+                    elif inside_etcs:
+                        unique_etcs_attrs.add(attr_name)
+                    elif inside_dru:
+                        unique_dru_attrs.add(attr_name)
 
     print()  # newline after progress bar
-    return sorted(unique_jru_attrs), sorted(unique_etcs_attrs)
+    return sorted(unique_jru_attrs), sorted(unique_etcs_attrs), sorted(unique_dru_attrs)
 
 
 def find_adru_files(input_dir: str) -> List[Path]:

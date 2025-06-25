@@ -1,12 +1,13 @@
 import sqlite3
-import pandas as pd
 from datetime import datetime
 from pathlib import Path
+
+import pandas as pd
 
 from adru_utils import compute_md5_cached, count_msg_in_txt
 
 
-def initialize_adru_database(db_path: Path, jru_attributes: list, etcs_attributes: list):
+def initialize_adru_database(db_path: Path, jru_attributes: list, etcs_attributes: list, dru_attributes: list):
     """
     Creates the ADRU database with the specified schema and inserts unique JRU and ETCS attributes
     as columns in their respective tables if the database does not already exist.
@@ -15,6 +16,7 @@ def initialize_adru_database(db_path: Path, jru_attributes: list, etcs_attribute
         db_path (Path): Path to the SQLite database file
         jru_attributes (list): List of unique JRU attribute names
         etcs_attributes (list): List of unique ETCS attribute names
+        dru_attributes (list): List of unique DRU attribute names
     """
     if db_path.exists():
         print("📦 Database already exists. No action taken.")
@@ -77,6 +79,17 @@ def initialize_adru_database(db_path: Path, jru_attributes: list, etcs_attribute
                 ame_am_id INTEGER,
                 {columns_etcs},
                 FOREIGN KEY (ame_am_id) REFERENCES adru_messages (am_id)
+            )
+        """)
+
+        # Create dru_message_etcs table
+        columns_dru = ",\n".join([f'"{attr}" TEXT' for attr in dru_attributes])
+        cursor.execute(f"""
+            CREATE TABLE adru_message_dru (
+                amd_id INTEGER PRIMARY KEY,
+                amd_am_id INTEGER,
+                {columns_dru},
+                FOREIGN KEY (amd_am_id) REFERENCES adru_messages (am_id)
             )
         """)
 
@@ -304,6 +317,8 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
     current_msg_local_id = None
     current_jru_data = {}
     current_etcs_data = {}
+    current_dru_data = {}
+    inside_dru = False
     inside_jru = False
     inside_etcs = False
     inserted_count = 0  # Track inserted messages
@@ -342,6 +357,15 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
                 (am_id, *current_etcs_data.values())
             )
 
+        # Insert into adru_message_dru
+        if current_dru_data:
+            dru_cols = ", ".join(f'"{k}"' for k in current_dru_data.keys())
+            dru_placeholders = ", ".join("?" for _ in current_dru_data)
+            cursor.execute(
+                f"INSERT INTO adru_message_dru (amd_am_id, {dru_cols}) VALUES (?, {dru_placeholders})",
+                (am_id, *current_dru_data.values())
+            )
+
     with txt_path.open("r", encoding="utf-8", errors="ignore") as f:
         for line in f:
             line = line.strip()
@@ -354,6 +378,14 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
                 current_etcs_data.clear()
                 inside_jru = False
                 inside_etcs = False
+                continue
+
+            if line == "DRU ETCS (":
+                inside_dru = True
+                continue
+
+            if line == ")" and inside_dru:
+                inside_dru = False
                 continue
 
             if line == "JRU (":
@@ -381,6 +413,8 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
                         current_etcs_data[attr] = value
                     elif inside_jru:
                         current_jru_data[attr] = value
+                    elif inside_dru:
+                        current_dru_data[attr] = value
 
     # Insert final message
     insert_current_msg()
@@ -392,7 +426,8 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
 
 def enrich_dataframe_with_db_values(df: pd.DataFrame, db_path: Path, adru_file_id: int) -> pd.DataFrame:
     """
-    Enrich the given DataFrame with additional values from the SQLite database for matching messages.
+    Enrich the given DataFrame with additional values from the SQLite database for matching messages,
+    including JRU, ETCS, and DRU data.
 
     Args:
         df (pd.DataFrame): DataFrame read from CSV
@@ -415,17 +450,17 @@ def enrich_dataframe_with_db_values(df: pd.DataFrame, db_path: Path, adru_file_i
     amf_id = row[0]
     print(f"🔗 Using amf_id {amf_id} for adru_file_id {adru_file_id}")
 
-    # Prepare new columns we'll enrich the CSV with
     all_new_columns = set()
-
     enriched_rows = []
 
     for i, (_, row) in enumerate(df.iterrows(), start=1):
-        print(f"\r🔍 Enriching row {i} of {len(df)} (local_id {row['N°']})...", end="")
+        print(f"\r🔍 Enriching row {i} of {len(df)} (local_id (N°) {row['N°']})...", end="")
         local_id = row["N°"]
-        enriched_data = row.to_dict()  # Start with existing CSV data
 
-        # Get adru_messages.am_id
+        # Start with existing CSV data
+        enriched_data = row.to_dict()
+
+        # Get message ID
         cursor.execute("""
             SELECT am_id FROM adru_messages WHERE am_local_id = ? AND am_amf_id = ?
         """, (local_id, amf_id))
@@ -437,7 +472,7 @@ def enrich_dataframe_with_db_values(df: pd.DataFrame, db_path: Path, adru_file_i
 
         am_id = result[0]
 
-        # Fetch JRU data
+        # JRU
         cursor.execute("SELECT * FROM adru_message_jru WHERE amj_am_id = ?", (am_id,))
         jru = cursor.fetchone()
         if jru:
@@ -447,7 +482,7 @@ def enrich_dataframe_with_db_values(df: pd.DataFrame, db_path: Path, adru_file_i
                     enriched_data[col] = val
                     all_new_columns.add(col)
 
-        # Fetch ETCS data
+        # ETCS
         cursor.execute("SELECT * FROM adru_message_etcs WHERE ame_am_id = ?", (am_id,))
         etcs = cursor.fetchone()
         if etcs:
@@ -457,15 +492,25 @@ def enrich_dataframe_with_db_values(df: pd.DataFrame, db_path: Path, adru_file_i
                     enriched_data[col] = val
                     all_new_columns.add(col)
 
+        # DRU
+        cursor.execute("SELECT * FROM adru_message_dru WHERE amd_am_id = ?", (am_id,))
+        dru = cursor.fetchone()
+        if dru:
+            col_names = [desc[0] for desc in cursor.description]
+            for col, val in zip(col_names, dru):
+                if col not in ("amd_id", "amd_am_id"):
+                    enriched_data[col] = val
+                    all_new_columns.add(col)
+
         enriched_rows.append(enriched_data)
 
-    # Convert enriched list to DataFrame and re-order
+    # Create DataFrame
     enriched_df = pd.DataFrame(enriched_rows)
 
-    # Move all new columns to the end
+    # Ensure all new columns are placed at the end
     ordered_columns = list(df.columns) + sorted(c for c in all_new_columns if c not in df.columns)
     enriched_df = enriched_df[ordered_columns]
-    print("\n✅ All rows enriched.")
 
+    print("\n✅ All rows enriched.")
     conn.close()
     return enriched_df

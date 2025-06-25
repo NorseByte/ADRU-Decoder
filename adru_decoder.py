@@ -107,11 +107,30 @@ jru_attributes = ['(1)', '(2)', '(3)', '(4)', '(5)', 'ADHESION', 'BALISE_ERROR_S
 etcs_attributes = ['CURRENT_SPEED_1KPH', 'JRU_L_DATA', 'NID_PROPRIO_MESSAGE', 'TRU_L_TEXT', 'TRU_NID_SOURCE',
                    'TRU_Q_TEXT', 'TRU_Q_TEXTCLASS', 'TRU_Q_TEXTCONFIRM', 'TRU_X_TEXT']
 
+dru_attributes = ['(0)', '(1)', '(2)', '(3)', '(4)', '(5)', '(6)', '(7)', '(8)', '(9)', 'A_NVMAXREDADH1',
+                  'A_NVMAXREDADH2', 'A_NVMAXREDADH3', 'A_NVP12', 'A_NVP23', 'DATE.DAY', 'DATE.MONTH', 'DATE.YEAR',
+                  'DRU_L_PACKET', 'DRU_M_DIAG', 'DRU_NID_CHANNEL', 'DRU_NID_PACKET', 'D_NVOVTRP', 'D_NVPOTRP',
+                  'D_NVROLL', 'D_NVSTFF', 'GPS_LATITUDE', 'GPS_LAT_DECIMAL', 'GPS_LAT_DEGREE', 'GPS_LAT_MINUTE',
+                  'GPS_LONGITUDE', 'GPS_LONG_DECIMAL', 'GPS_LONG_DEGREE', 'GPS_LONG_MINUTE', 'GPS_VALIDITY',
+                  'L_MESSAGE', 'L_NVKRINT(0)', 'MOBILE_ID', 'MOBILE_SIGNAL_LEVEL', 'M_NVAVADH', 'M_NVCONTACT',
+                  'M_NVDERUN', 'M_NVEBCL', 'M_NVKRINT(0)', 'M_NVKTINT', 'M_NVKVINT(0)', 'M_NVKVINT(1)',
+                  'M_NVKVINT_A(0)', 'M_NVKVINT_B(0)', 'NID_MESSAGE', 'NUMBER_OF_EVENTS', 'N_ITER',
+                  'N_OF_APPLICABLE_NID_C', 'N_OF_APPLICABLE_NID_C_FOR_BC_COMMON_PART',
+                  'N_OF_APPLICABLE_NID_C_FOR_BC_FREIGHT', 'N_OF_APPLICABLE_NID_C_FOR_BC_KR_KT',
+                  'N_OF_APPLICABLE_NID_C_FOR_BC_PASSENGER', 'N_OF_APPLICABLE_NID_C_FROM_BSL3',
+                  'N_OF_NV_FREIGHT_KV_INT_POINTS', 'N_OF_NV_KR_INT_POINTS', 'N_OF_NV_PASSENGER_KV_INT_POINTS',
+                  'Q_NVDRIVER_ADHES', 'Q_NVEMRRLS', 'Q_NVGUIPERM', 'Q_NVINHSMICPERM', 'Q_NVLOCACC', 'Q_NVSBFBPERM',
+                  'Q_NVSBTSMPERM', 'Q_SCALE', 'RADIO_NETWORK_ID_VALUE', 'RAW_MOBILE_STATUS', 'STAT_TYPE', 'TIME.HOUR',
+                  'TIME.MILLISECONDS', 'TIME.MINUTES', 'TIME.SECONDS', 'TRU_L_TEXT', 'TRU_NID_SOURCE', 'TRU_X_TEXT',
+                  'T_NVCONTACT', 'T_NVOVTRP', 'VBC_N_ITER', 'V_NVALLOWOVTRP', 'V_NVKVINT(0)', 'V_NVKVINT(1)',
+                  'V_NVLIMSUPERV', 'V_NVONSIGHT', 'V_NVREL', 'V_NVSHUNT', 'V_NVSTFF', 'V_NVSUPOVTRP', 'V_NVUNFIT']
+
 # Init db with attributes fetch from previous adru files
 initialize_adru_database(
     db_file,
     jru_attributes,
-    etcs_attributes
+    etcs_attributes,
+    dru_attributes
 )
 
 
@@ -185,29 +204,47 @@ def run_adru_txt_conversion():
 
         if not newest_txt_file_path:
             print(f"❌ No .txt files found in {txt_output_dir}")
+            exit(1)
         else:
             # Find all the unique attribute lines and present them, this is only as a control
             # The db has already a preset of attribute, and if you see a new one in the list this needs to be manually
             # added to the database schema and the code that handles the attributes.
-            jru_attrs, etcs_attrs = extract_unique_attributes(newest_txt_file_path, total_messages)
+            jru_attrs, etcs_attrs, dru_attrs = extract_unique_attributes(newest_txt_file_path, total_messages)
 
             # Compare with master attribute lists
             missing_jru = sorted(set(jru_attrs) - set(jru_attributes))
             missing_etcs = sorted(set(etcs_attrs) - set(etcs_attributes))
+            missing_dru = sorted(set(dru_attrs) - set(dru_attributes))
 
             if missing_jru:
                 print("\n⚠️ Missing JRU attributes:")
-                for attr in missing_jru:
-                    print("  -", attr)
+                print(missing_jru)
+                print(
+                    "\n🛠 Please add these attributes to the database schema manually. Delete the old db file if any, "
+                    "and run the program again to recreate the database schema.")
+                exit("🛑 Exiting due to missing JRU attributes.")
             else:
                 print("✅ All JRU attributes are already in the database schema.")
 
             if missing_etcs:
                 print("\n⚠️ Missing ETCS attributes:")
-                for attr in missing_etcs:
-                    print("  -", attr)
+                print(missing_etcs)
+                print(
+                    "\n🛠 Please add these attributes to the database schema manually. Delete the old db file if any, "
+                    "and run the program again to recreate the database schema.")
+                exit("🛑 Exiting due to missing ETCS attributes.")
             else:
                 print("✅ All ETCS attributes are already in the database schema.")
+
+            if missing_dru:
+                print("\n⚠️ Missing DRU attributes:")
+                print(missing_dru)
+                print(
+                    "\n🛠 Please add these attributes to the database schema manually. Delete the old db file if any, "
+                    "and run the program again to recreate the database schema.")
+                exit("🛑 Exiting due to missing DRU attributes.")
+            else:
+                print("✅ All DRU attributes are already in the database schema.")
 
             # Verify that the txt file content has not all ready been added to the database
             if is_txt_content_in_db_with_entries(db_file, amf_id):
