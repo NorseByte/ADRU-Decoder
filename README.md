@@ -74,7 +74,7 @@ The reason here is that you might have created the file from EXCEL. And it did n
 
 It should now work without any issues.
 
-### Database diagram
+## Database diagram
 ![database-schema.png](database-schema.png)
 
 ````db2
