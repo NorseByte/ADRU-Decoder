@@ -376,8 +376,10 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
                 current_msg_local_id = int(line.split(" ")[1].rstrip(":"))
                 current_jru_data.clear()
                 current_etcs_data.clear()
+                current_dru_data.clear()
                 inside_jru = False
                 inside_etcs = False
+                inside_dru = False
                 continue
 
             if line == "DRU ETCS (":

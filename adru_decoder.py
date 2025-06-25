@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -328,8 +329,17 @@ def run_csv_txt_merge_conversion():
 
     # Save new merged file in the csv_out dir
     print(f"\n📂 Saving merged CSV to: {csv_output_dir}")
-    output_path = Path(csv_output_dir) / f"merged_{selected_csv.name}"
+
+    # Create timestamp string
+    timestamp_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S (U)")
+
+    # Construct new filename
+    output_filename = f"{timestamp_str} Merged, {selected_csv.name}"
+
+    # Save to output path
+    output_path = Path(csv_output_dir) / output_filename
     updated_df.to_csv(output_path, index=False, sep=";")
+
     print(f"✅ Merged CSV saved successfully: {output_path.name}")
 
 
