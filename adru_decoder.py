@@ -190,8 +190,6 @@ def run_adru_txt_conversion():
             # The db has already a preset of attribute, and if you see a new one in the list this needs to be manually
             # added to the database schema and the code that handles the attributes.
             jru_attrs, etcs_attrs = extract_unique_attributes(newest_txt_file_path, total_messages)
-            print("🔍 JRU attributes:", jru_attrs)
-            print("🔍 ETCS attributes:", etcs_attrs)
 
             # Compare with master attribute lists
             missing_jru = sorted(set(jru_attrs) - set(jru_attributes))
