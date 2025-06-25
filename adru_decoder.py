@@ -9,6 +9,7 @@ from adru_db_utils import initialize_adru_database, add_adru_file_to_db, add_mes
     get_all_adru_files_that_has_txt_files_and_latest_txt, is_txt_content_in_db_with_entries, \
     enrich_dataframe_with_db_values
 from adru_utils import find_adru_files, get_latest_txt_file, prompt_user_and_wait_for_txt, extract_unique_attributes
+from adru_statistic import run_statistic_generation
 
 # Load YAML config
 with open("config.yaml", "r", encoding="utf-8") as f:
@@ -400,19 +401,22 @@ def run_csv_txt_merge_conversion():
 def show_main_menu():
     print("\n====== ADRU Decoder Menu ======\n")
     print("1. 🧾 Generate .txt from .adru and insert into DB")
-    print("2. 📎 Merge CSV with .txt (Coming soon)")
-    print("3. ❌ Exit")
+    print("2. 📎 Merge CSV with .txt")
+    print("3. 📈 Generate statistic based on database values (Coming soon)")
+    print("4. ❌ Exit")
 
-    choice = input("\nEnter your choice (1-3): ").strip()
+    choice = input("\nEnter your choice (1-4): ").strip()
 
     if choice == "1":
         run_adru_txt_conversion()
     elif choice == "2":
         run_csv_txt_merge_conversion()
     elif choice == "3":
+        run_statistic_generation()
+    elif choice == "4":
         print("\n👋 Exiting program. Goodbye!")
     else:
-        print("❌ Invalid choice. Please enter 1, 2, or 3.")
+        print("❌ Invalid choice. Please enter 1, 2, 3 or 4.")
 
 
 if __name__ == "__main__":
