@@ -68,9 +68,7 @@ def extract_unique_attributes(txt_path: Path, total_messages: int) -> tuple[list
     unique_etcs_attrs = set()
     unique_dru_attrs = set()
 
-    inside_jru = False
-    inside_etcs = False
-    inside_dru = False
+    inside_jru = inside_etcs = inside_dru = False
     current_msg = 0
 
     with txt_path.open("r", encoding="utf-8", errors="ignore") as file:
@@ -81,51 +79,47 @@ def extract_unique_attributes(txt_path: Path, total_messages: int) -> tuple[list
             if line.startswith("Msg "):
                 current_msg += 1
                 print(f"\r🔍 Scanning message {current_msg} of {total_messages} for attributes", end="")
-                inside_jru = False
-                inside_etcs = False
-                inside_dru = False
+                inside_jru = inside_etcs = inside_dru = False
                 continue
 
             # Section openers
             if line == "JRU (":
-                inside_jru = True
-                inside_etcs = inside_dru = False
+                inside_jru, inside_etcs, inside_dru = True, False, False
                 continue
-
-            if line == "ETCS ON-BOARD PROPRIETARY JURIDICAL DATA (":
-                inside_etcs = True
-                inside_jru = inside_dru = False
+            elif line == "ETCS ON-BOARD PROPRIETARY JURIDICAL DATA (":
+                inside_jru, inside_etcs, inside_dru = False, True, False
                 continue
-
-            if line == "DRU ETCS (":
-                inside_dru = True
-                inside_jru = inside_etcs = False
+            elif line == "DRU ETCS (":
+                inside_jru, inside_etcs, inside_dru = False, False, True
                 continue
 
             # Section closers
-            if line == ")" and inside_dru:
-                inside_dru = False
+            if line == ")" and (inside_jru or inside_etcs or inside_dru):
+                inside_jru = inside_etcs = inside_dru = False
                 continue
 
-            if line == ")" and inside_etcs:
-                inside_etcs = False
-                continue
+            # Detect correct delimiter by order of appearance
+            first_colon = line.find(":")
+            first_equal = line.find("=")
 
-            if line == ")" and inside_jru:
-                inside_jru = False
-                continue
+            if first_colon == -1 and first_equal == -1:
+                continue  # no known delimiter
 
-            # Collect attribute names
-            if inside_jru or inside_etcs or inside_dru:
+            if first_equal != -1 and (first_colon == -1 or first_equal < first_colon):
+                # '=' comes first
+                parts = line.split("=", 1)
+            else:
+                # ':' comes first
                 parts = line.split(":", 1)
-                if len(parts) >= 2:
-                    attr_name = parts[0].split(maxsplit=1)[-1].strip()
-                    if inside_jru:
-                        unique_jru_attrs.add(attr_name)
-                    elif inside_etcs:
-                        unique_etcs_attrs.add(attr_name)
-                    elif inside_dru:
-                        unique_dru_attrs.add(attr_name)
+
+            if len(parts) == 2:
+                attr_name = parts[0].strip()
+                if inside_jru:
+                    unique_jru_attrs.add(attr_name)
+                elif inside_etcs:
+                    unique_etcs_attrs.add(attr_name)
+                elif inside_dru:
+                    unique_dru_attrs.add(attr_name)
 
     print()  # newline after progress bar
     return sorted(unique_jru_attrs), sorted(unique_etcs_attrs), sorted(unique_dru_attrs)

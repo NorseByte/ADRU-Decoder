@@ -318,10 +318,8 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
     current_jru_data = {}
     current_etcs_data = {}
     current_dru_data = {}
-    inside_dru = False
-    inside_jru = False
-    inside_etcs = False
-    inserted_count = 0  # Track inserted messages
+    inside_dru = inside_jru = inside_etcs = False
+    inserted_count = 0
 
     def insert_current_msg():
         nonlocal inserted_count
@@ -331,38 +329,37 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
         inserted_count += 1
         print(f"\r📝 Inserting message {inserted_count} of {total_messages}", end="")
 
-        # Insert into adru_messages
+        # Insert message reference
         cursor.execute(
             "INSERT INTO adru_messages (am_local_id, am_amf_id) VALUES (?, ?)",
             (current_msg_local_id, amf_id)
         )
         am_id = cursor.lastrowid
 
-        # Insert into adru_message_jru
+        # JRU
         if current_jru_data:
-            jru_cols = ", ".join(f'"{k}"' for k in current_jru_data.keys())
-            jru_placeholders = ", ".join("?" for _ in current_jru_data)
-
+            cols = ", ".join(f'"{k}"' for k in current_jru_data)
+            placeholders = ", ".join("?" for _ in current_jru_data)
             cursor.execute(
-                f"INSERT INTO adru_message_jru (amj_am_id, {jru_cols}) VALUES (?, {jru_placeholders})",
+                f"INSERT INTO adru_message_jru (amj_am_id, {cols}) VALUES (?, {placeholders})",
                 (am_id, *current_jru_data.values())
             )
 
-        # Insert into adru_message_etcs
+        # ETCS
         if current_etcs_data:
-            etcs_cols = ", ".join(f'"{k}"' for k in current_etcs_data.keys())
-            etcs_placeholders = ", ".join("?" for _ in current_etcs_data)
+            cols = ", ".join(f'"{k}"' for k in current_etcs_data)
+            placeholders = ", ".join("?" for _ in current_etcs_data)
             cursor.execute(
-                f"INSERT INTO adru_message_etcs (ame_am_id, {etcs_cols}) VALUES (?, {etcs_placeholders})",
+                f"INSERT INTO adru_message_etcs (ame_am_id, {cols}) VALUES (?, {placeholders})",
                 (am_id, *current_etcs_data.values())
             )
 
-        # Insert into adru_message_dru
+        # DRU
         if current_dru_data:
-            dru_cols = ", ".join(f'"{k}"' for k in current_dru_data.keys())
-            dru_placeholders = ", ".join("?" for _ in current_dru_data)
+            cols = ", ".join(f'"{k}"' for k in current_dru_data)
+            placeholders = ", ".join("?" for _ in current_dru_data)
             cursor.execute(
-                f"INSERT INTO adru_message_dru (amd_am_id, {dru_cols}) VALUES (?, {dru_placeholders})",
+                f"INSERT INTO adru_message_dru (amd_am_id, {cols}) VALUES (?, {placeholders})",
                 (am_id, *current_dru_data.values())
             )
 
@@ -370,53 +367,52 @@ def insert_messages_from_txt(txt_path: Path, db_path: Path, amf_id: int, total_m
         for line in f:
             line = line.strip()
 
-            # Message start
             if line.startswith("Msg "):
                 insert_current_msg()
                 current_msg_local_id = int(line.split(" ")[1].rstrip(":"))
                 current_jru_data.clear()
                 current_etcs_data.clear()
                 current_dru_data.clear()
-                inside_jru = False
-                inside_etcs = False
-                inside_dru = False
+                inside_dru = inside_jru = inside_etcs = False
                 continue
 
+            # Section openers
             if line == "DRU ETCS (":
-                inside_dru = True
+                inside_dru, inside_jru, inside_etcs = True, False, False
                 continue
-
-            if line == ")" and inside_dru:
-                inside_dru = False
-                continue
-
             if line == "JRU (":
-                inside_jru = True
+                inside_jru, inside_dru, inside_etcs = True, False, False
                 continue
-
             if line == "ETCS ON-BOARD PROPRIETARY JURIDICAL DATA (":
-                inside_etcs = True
+                inside_etcs, inside_jru, inside_dru = True, False, False
                 continue
 
-            if line == ")" and inside_etcs:
-                inside_etcs = False
+            # Section closers
+            if line == ")" and (inside_dru or inside_etcs or inside_jru):
+                inside_dru = inside_etcs = inside_jru = False
                 continue
 
-            if line == ")" and inside_jru and not inside_etcs:
-                inside_jru = False
-                continue
+            # Determine split character position
+            first_colon = line.find(":")
+            first_equal = line.find("=")
 
-            if ":" in line:
+            if first_colon == -1 and first_equal == -1:
+                continue  # No known delimiter
+
+            if first_equal != -1 and (first_colon == -1 or first_equal < first_colon):
+                parts = line.split("=", 1)
+            else:
                 parts = line.split(":", 1)
-                if len(parts) == 2:
-                    attr = parts[0].strip().split(maxsplit=1)[-1]
-                    value = parts[1].strip()
-                    if inside_etcs:
-                        current_etcs_data[attr] = value
-                    elif inside_jru:
-                        current_jru_data[attr] = value
-                    elif inside_dru:
-                        current_dru_data[attr] = value
+
+            if len(parts) == 2:
+                attr = parts[0].strip()
+                value = parts[1].strip()
+                if inside_jru:
+                    current_jru_data[attr] = value
+                elif inside_etcs:
+                    current_etcs_data[attr] = value
+                elif inside_dru:
+                    current_dru_data[attr] = value
 
     # Insert final message
     insert_current_msg()
